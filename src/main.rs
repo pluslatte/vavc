@@ -3,9 +3,11 @@ mod secret;
 
 use clap::{Parser, Subcommand, command};
 use std::io::{self, Write};
+use vrchatapi::apis;
 
 use crate::auth::check_auth_cookie;
 use crate::auth::get_new_auth_cookie;
+use crate::auth::prepare_auth_cookie;
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -81,8 +83,35 @@ async fn handler_auth(username: Option<String>, password: Option<String>, check:
 }
 
 async fn handler_search(query: String) {
-    // Placeholder for search logic
-    println!("Searching for avatars with query: {}", query);
+    println!("Search results for query '{}':", query);
+
+    let config = prepare_auth_cookie();
+
+    let avatars = apis::avatars_api::search_avatars(
+        &config,
+        Some(false),
+        Some(vrchatapi::models::SortOption::Name),
+        Some("me"),
+        None,
+        Some(60),
+        None,
+        None,
+        None,
+        None,
+        Some(vrchatapi::models::ReleaseStatus::All),
+        None,
+        None,
+        None,
+    )
+    .await;
+
+    if let Ok(avatars) = avatars {
+        avatars.iter().for_each(|avatar| {
+            println!("{}: {}", avatar.name, avatar.id);
+        });
+    } else {
+        eprintln!("Failed to fetch avatars: {}", avatars.err().unwrap());
+    }
 }
 
 fn read_user_input(prompt: &str) -> String {
