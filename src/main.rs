@@ -21,7 +21,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    #[command(about = "Get a new auth cookie")]
+    #[command(about = "(RATE LIMIT WARNING) Get a new auth cookie")]
     Auth {
         #[arg(short, long, help = "Check if your saved cookie is valid")]
         check: bool,
