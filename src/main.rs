@@ -1,7 +1,9 @@
 use clap::{Parser, Subcommand, command};
+use reqwest::{cookie::CookieStore, header::HeaderValue};
 use std::{
     io::{self, Write},
-    ptr::read,
+    str::FromStr,
+    sync::Arc,
 };
 use vrchatapi::{
     apis,
@@ -18,6 +20,9 @@ struct Cli {
 enum Commands {
     #[command(about = "Get a new auth cookie")]
     Auth {
+        #[arg(short, long, help = "Check if your saved cookie is valid")]
+        check: bool,
+
         #[arg(short, long, help = "Optional pre-input username")]
         username: Option<String>,
 
@@ -64,14 +69,26 @@ async fn main() {
     };
 
     match cli.command {
-        Commands::Auth { username, password } => handler_auth(username, password).await,
+        Commands::Auth {
+            username,
+            password,
+            check,
+        } => handler_auth(username, password, check).await,
         Commands::Switch { id } => handler_switch(id),
         Commands::Search { query } => handler_search(query),
         Commands::Show { id } => handler_show(id),
     }
 }
 
-async fn handler_auth(username: Option<String>, password: Option<String>) {
+async fn handler_auth(username: Option<String>, password: Option<String>, check: bool) {
+    if check {
+        check_auth_cookie(username, password).await;
+    } else {
+        get_new_auth_cookie(username, password).await;
+    }
+}
+
+async fn get_new_auth_cookie(username: Option<String>, password: Option<String>) {
     let username = match username {
         Some(name) => name,
         None => read_user_input("Enter your username: "),
@@ -81,9 +98,95 @@ async fn handler_auth(username: Option<String>, password: Option<String>) {
         None => read_user_input("Enter your password: "),
     };
 
+    let jar = Arc::new(reqwest::cookie::Jar::default());
+
     let config = apis::configuration::Configuration {
         basic_auth: Some((username, Some(password))),
         user_agent: Some(String::from("my-rust-client/1.0.0")),
+        client: reqwest::Client::builder()
+            .cookie_provider(jar.clone())
+            .build()
+            .unwrap(),
+        ..Default::default()
+    };
+
+    match apis::authentication_api::get_current_user(&config)
+        .await
+        .unwrap()
+    {
+        vrchatapi::models::EitherUserOrTwoFactor::CurrentUser(user) => {
+            println!("Username: {}", user.username.unwrap());
+        }
+        vrchatapi::models::EitherUserOrTwoFactor::RequiresTwoFactorAuth(auth_required) => {
+            if auth_required
+                .requires_two_factor_auth
+                .contains(&String::from("emailOtp"))
+            {
+                let code = read_user_input("Enter the 2FA code sent to your email: ");
+                if let Err(e) = apis::authentication_api::verify2_fa_email_code(
+                    &config,
+                    TwoFactorEmailCode::new(code),
+                )
+                .await
+                {
+                    eprintln!("Failed to verify 2FA code: {}", e);
+                }
+            } else {
+                let code = read_user_input("Enter your 2FA code: ");
+                if let Err(e) =
+                    apis::authentication_api::verify2_fa(&config, TwoFactorAuthCode::new(code))
+                        .await
+                {
+                    eprintln!("Failed to verify 2FA code: {}", e);
+                }
+            }
+        }
+    }
+
+    let user = apis::authentication_api::get_current_user(&config)
+        .await
+        .unwrap();
+
+    match user {
+        EitherUserOrTwoFactor::CurrentUser(user) => {
+            // TODO: Save cookies to ./secret in two lines: auth cookie and twoFactorAuth cookie
+            println!("Logged in as: {}", user.username.unwrap())
+        }
+        EitherUserOrTwoFactor::RequiresTwoFactorAuth(_) => eprintln!("cookie invalid"),
+    }
+}
+
+async fn check_auth_cookie(username: Option<String>, password: Option<String>) {
+    let username = match username {
+        Some(name) => name,
+        None => read_user_input("Enter your username: "),
+    };
+    let password = match password {
+        Some(pass) => pass,
+        None => read_user_input("Enter your password: "),
+    };
+
+    let jar = Arc::new(reqwest::cookie::Jar::default());
+    if let Some(cookies) = read_secret_in_directory() {
+        jar.set_cookies(
+            &mut [HeaderValue::from_str(&format!(
+                "auth={}, twoFactorAuth={}",
+                cookies.first().unwrap(),
+                cookies.get(1).unwrap()
+            ))
+            .expect("Invalid cookie string")]
+            .iter(),
+            &url::Url::from_str("https://api.vrchat.cloud").expect("Invalid URL"),
+        );
+    }
+
+    let config = apis::configuration::Configuration {
+        basic_auth: Some((username, Some(password))),
+        user_agent: Some(String::from("my-rust-client/1.0.0")),
+        client: reqwest::Client::builder()
+            .cookie_provider(jar.clone())
+            .build()
+            .unwrap(),
         ..Default::default()
     };
 
@@ -142,4 +245,17 @@ fn read_user_input(prompt: &str) -> String {
         .expect("Failed to read line");
 
     input.trim().to_string()
+}
+
+fn read_secret_in_directory() -> Option<Vec<String>> {
+    match std::fs::read_to_string("./secret") {
+        Ok(content) => {
+            let lines: Vec<String> = content
+                .lines()
+                .map(|line| line.trim().to_string())
+                .collect();
+            if lines.len() >= 2 { Some(lines) } else { None }
+        }
+        Err(_) => None,
+    }
 }

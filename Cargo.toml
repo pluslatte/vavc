@@ -5,5 +5,7 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.46", features = ["derive"] }
+reqwest = "0.12.23"
 tokio = { version = "1.47.1", features = ["full"] }
+url = "2.5.7"
 vrchatapi = "1.20.2"

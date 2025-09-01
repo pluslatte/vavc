@@ -1747,7 +1747,9 @@ name = "vavc"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "reqwest",
  "tokio",
+ "url",
  "vrchatapi",
 ]
 
