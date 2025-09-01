@@ -1,7 +1,7 @@
 use reqwest::{cookie::CookieStore, header::HeaderValue};
 use std::{str::FromStr, sync::Arc};
 use vrchatapi::{
-    apis,
+    apis::{self, configuration::Configuration},
     models::{EitherUserOrTwoFactor, TwoFactorAuthCode, TwoFactorEmailCode},
 };
 
@@ -79,6 +79,15 @@ pub async fn get_new_auth_cookie(username: Option<String>, password: Option<Stri
 }
 
 pub async fn check_auth_cookie() {
+    let config = prepare_auth_cookie();
+
+    match apis::authentication_api::verify_auth_token(&config).await {
+        Ok(_) => println!("Auth cookie is valid"),
+        Err(e) => eprintln!("Auth cookie is invalid: {}", e),
+    }
+}
+
+pub fn prepare_auth_cookie() -> Configuration {
     let jar = Arc::new(reqwest::cookie::Jar::default());
     if let Some(cookies) = read_secret_in_directory() {
         jar.set_cookies(
@@ -93,17 +102,12 @@ pub async fn check_auth_cookie() {
         );
     }
 
-    let config = apis::configuration::Configuration {
+    apis::configuration::Configuration {
         user_agent: Some(String::from("my-rust-client/1.0.0")),
         client: reqwest::Client::builder()
             .cookie_provider(jar.clone())
             .build()
             .unwrap(),
         ..Default::default()
-    };
-
-    match apis::authentication_api::verify_auth_token(&config).await {
-        Ok(_) => println!("Auth cookie is valid"),
-        Err(e) => eprintln!("Auth cookie is invalid: {}", e),
     }
 }
