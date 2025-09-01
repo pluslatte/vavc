@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand, command};
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    ptr::read,
+};
 use vrchatapi::{
     apis,
     models::{EitherUserOrTwoFactor, TwoFactorAuthCode, TwoFactorEmailCode},
@@ -45,15 +48,6 @@ enum Commands {
 async fn main() {
     let cli = Cli::parse();
 
-    let handler_auth = |username: Option<String>, password: Option<String>| {
-        // Placeholder for authentication logic
-        println!(
-            "Authenticating with username: {}, password: {}",
-            username.unwrap_or(String::from("nope")),
-            password.unwrap_or(String::from("nope"))
-        );
-    };
-
     let handler_switch = |id: String| {
         // Placeholder for switch logic
         println!("Switching to avatar ID: {}", id);
@@ -70,64 +64,72 @@ async fn main() {
     };
 
     match cli.command {
-        Commands::Auth { username, password } => handler_auth(username, password),
+        Commands::Auth { username, password } => handler_auth(username, password).await,
         Commands::Switch { id } => handler_switch(id),
         Commands::Search { query } => handler_search(query),
         Commands::Show { id } => handler_show(id),
     }
+}
 
-    // let username = std::env::args().nth(1).expect("Username not provided");
-    // let password = std::env::args().nth(2).expect("Password not provided");
+async fn handler_auth(username: Option<String>, password: Option<String>) {
+    let username = match username {
+        Some(name) => name,
+        None => read_user_input("Enter your username: "),
+    };
+    let password = match password {
+        Some(pass) => pass,
+        None => read_user_input("Enter your password: "),
+    };
 
-    // let config = apis::configuration::Configuration {
-    //     basic_auth: Some((username, Some(password))),
-    //     user_agent: Some(String::from("my-rust-client/1.0.0")),
-    //     ..Default::default()
-    // };
+    let config = apis::configuration::Configuration {
+        basic_auth: Some((username, Some(password))),
+        user_agent: Some(String::from("my-rust-client/1.0.0")),
+        ..Default::default()
+    };
 
-    // match apis::authentication_api::get_current_user(&config)
-    //     .await
-    //     .unwrap()
-    // {
-    //     vrchatapi::models::EitherUserOrTwoFactor::CurrentUser(user) => {
-    //         println!("Username: {}", user.username.unwrap());
-    //     }
-    //     vrchatapi::models::EitherUserOrTwoFactor::RequiresTwoFactorAuth(auth_required) => {
-    //         if auth_required
-    //             .requires_two_factor_auth
-    //             .contains(&String::from("emailOtp"))
-    //         {
-    //             let code = read_user_input("Enter the 2FA code sent to your email: ");
-    //             if let Err(e) = apis::authentication_api::verify2_fa_email_code(
-    //                 &config,
-    //                 TwoFactorEmailCode::new(code),
-    //             )
-    //             .await
-    //             {
-    //                 eprintln!("Failed to verify 2FA code: {}", e);
-    //             }
-    //         } else {
-    //             let code = read_user_input("Enter your 2FA code: ");
-    //             if let Err(e) =
-    //                 apis::authentication_api::verify2_fa(&config, TwoFactorAuthCode::new(code))
-    //                     .await
-    //             {
-    //                 eprintln!("Failed to verify 2FA code: {}", e);
-    //             }
-    //         }
-    //     }
-    // }
+    match apis::authentication_api::get_current_user(&config)
+        .await
+        .unwrap()
+    {
+        vrchatapi::models::EitherUserOrTwoFactor::CurrentUser(user) => {
+            println!("Username: {}", user.username.unwrap());
+        }
+        vrchatapi::models::EitherUserOrTwoFactor::RequiresTwoFactorAuth(auth_required) => {
+            if auth_required
+                .requires_two_factor_auth
+                .contains(&String::from("emailOtp"))
+            {
+                let code = read_user_input("Enter the 2FA code sent to your email: ");
+                if let Err(e) = apis::authentication_api::verify2_fa_email_code(
+                    &config,
+                    TwoFactorEmailCode::new(code),
+                )
+                .await
+                {
+                    eprintln!("Failed to verify 2FA code: {}", e);
+                }
+            } else {
+                let code = read_user_input("Enter your 2FA code: ");
+                if let Err(e) =
+                    apis::authentication_api::verify2_fa(&config, TwoFactorAuthCode::new(code))
+                        .await
+                {
+                    eprintln!("Failed to verify 2FA code: {}", e);
+                }
+            }
+        }
+    }
 
-    // let user = apis::authentication_api::get_current_user(&config)
-    //     .await
-    //     .unwrap();
+    let user = apis::authentication_api::get_current_user(&config)
+        .await
+        .unwrap();
 
-    // match user {
-    //     EitherUserOrTwoFactor::CurrentUser(user) => {
-    //         println!("Logged in as: {}", user.username.unwrap())
-    //     }
-    //     EitherUserOrTwoFactor::RequiresTwoFactorAuth(_) => eprintln!("cookie invalid"),
-    // }
+    match user {
+        EitherUserOrTwoFactor::CurrentUser(user) => {
+            println!("Logged in as: {}", user.username.unwrap())
+        }
+        EitherUserOrTwoFactor::RequiresTwoFactorAuth(_) => eprintln!("cookie invalid"),
+    }
 }
 
 fn read_user_input(prompt: &str) -> String {
