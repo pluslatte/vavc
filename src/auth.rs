@@ -89,17 +89,23 @@ pub async fn check_auth_cookie() {
 
 pub fn prepare_auth_cookie() -> Configuration {
     let jar = Arc::new(reqwest::cookie::Jar::default());
-    if let Some(cookies) = read_secret_in_directory() {
-        jar.set_cookies(
-            &mut [HeaderValue::from_str(&format!(
-                "{}; {}",
-                cookies.first().unwrap(),
-                cookies.get(1).unwrap()
-            ))
-            .expect("Invalid cookie string")]
-            .iter(),
-            &url::Url::from_str("https://api.vrchat.cloud").expect("Invalid URL"),
-        );
+    match read_secret_in_directory() {
+        Some(cookies) => {
+            jar.set_cookies(
+                &mut [HeaderValue::from_str(&format!(
+                    "{}; {}",
+                    cookies.first().unwrap(),
+                    cookies.get(1).unwrap()
+                ))
+                .expect("Invalid cookie string")]
+                .iter(),
+                &url::Url::from_str("https://api.vrchat.cloud").expect("Invalid URL"),
+            );
+        }
+        None => {
+            eprintln!("No auth cookie found. Please authenticate first.");
+            std::process::exit(1);
+        }
     }
 
     apis::configuration::Configuration {
