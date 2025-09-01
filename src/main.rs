@@ -55,11 +55,6 @@ async fn main() {
         println!("Switching to avatar ID: {}", id);
     };
 
-    let handler_search = |query: String| {
-        // Placeholder for search logic
-        println!("Searching for avatars with query: {}", query);
-    };
-
     let handler_show = |id: String| {
         // Placeholder for show logic
         println!("Showing specifications for avatar ID: {}", id);
@@ -72,7 +67,7 @@ async fn main() {
             check,
         } => handler_auth(username, password, check).await,
         Commands::Switch { id } => handler_switch(id),
-        Commands::Search { query } => handler_search(query),
+        Commands::Search { query } => handler_search(query).await,
         Commands::Show { id } => handler_show(id),
     }
 }
@@ -83,6 +78,11 @@ async fn handler_auth(username: Option<String>, password: Option<String>, check:
     } else {
         get_new_auth_cookie(username, password).await;
     }
+}
+
+async fn handler_search(query: String) {
+    // Placeholder for search logic
+    println!("Searching for avatars with query: {}", query);
 }
 
 fn read_user_input(prompt: &str) -> String {
