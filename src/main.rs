@@ -77,19 +77,17 @@ async fn main() {
             username,
             password,
             check,
-        } => handler_auth(username, password, check).await,
+        } => {
+            if check {
+                check_auth_cookie().await
+            } else {
+                get_new_auth_cookie(username, password).await
+            };
+        }
         Commands::Fetch {} => fetch_avatars(make_configuration_with_cookies()).await,
         Commands::Switch { id } => handler_switch(id),
         Commands::Search { query } => handler_search(make_configuration_with_cookies(), query),
         Commands::Show { id } => handler_show(id),
-    }
-}
-
-async fn handler_auth(username: Option<String>, password: Option<String>, check: bool) {
-    if check {
-        check_auth_cookie().await;
-    } else {
-        get_new_auth_cookie(username, password).await;
     }
 }
 
