@@ -1,16 +1,15 @@
 mod auth;
+mod fetch;
 mod secret;
 
 use clap::{Parser, Subcommand, command};
 use std::io::{self, Write};
-use std::time::Duration;
-use tokio::time::sleep;
-use vrchatapi::apis;
 use vrchatapi::apis::configuration::Configuration;
 
 use crate::auth::check_auth_cookie;
 use crate::auth::get_new_auth_cookie;
 use crate::auth::make_configuration_with_cookies;
+use crate::fetch::fetch_avatars;
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -58,6 +57,11 @@ enum Commands {
 async fn main() {
     let cli = Cli::parse();
 
+    let handler_search = |config: Configuration, query: String| {
+        // Placeholder for search logic
+        println!("Searching for avatars with query: {}", query);
+    };
+
     let handler_switch = |id: String| {
         // Placeholder for switch logic
         println!("Switching to avatar ID: {}", id);
@@ -74,11 +78,9 @@ async fn main() {
             password,
             check,
         } => handler_auth(username, password, check).await,
-        Commands::Fetch {} => handler_fetch(make_configuration_with_cookies()).await,
+        Commands::Fetch {} => fetch_avatars(make_configuration_with_cookies()).await,
         Commands::Switch { id } => handler_switch(id),
-        Commands::Search { query } => {
-            handler_search(make_configuration_with_cookies(), query).await
-        }
+        Commands::Search { query } => handler_search(make_configuration_with_cookies(), query),
         Commands::Show { id } => handler_show(id),
     }
 }
@@ -90,64 +92,6 @@ async fn handler_auth(username: Option<String>, password: Option<String>, check:
         get_new_auth_cookie(username, password).await;
     }
 }
-
-async fn handler_fetch(config: Configuration) {
-    println!("Fetching avatars...");
-
-    let mut avatar_count: usize = 0;
-
-    loop {
-        let avatars = apis::avatars_api::search_avatars(
-            &config,
-            Some(false),
-            Some(vrchatapi::models::SortOption::Name),
-            Some("me"),
-            None,
-            Some(60),
-            None,
-            Some(avatar_count.try_into().expect("Negative avatar count wtf")),
-            None,
-            None,
-            Some(vrchatapi::models::ReleaseStatus::All),
-            None,
-            None,
-            None,
-        )
-        .await;
-
-        if let Ok(avatars) = avatars {
-            let got = avatars.len();
-            if got == 0 {
-                break;
-            }
-
-            println!(
-                "Fetched {} avatars, total so far: {}",
-                got,
-                avatar_count + got
-            );
-
-            avatar_count += got;
-            avatars.iter().for_each(|avatar| {
-                println!("{}: {}", avatar.name, avatar.id);
-            });
-
-            println!("Sleep for 5 seconds to avoid rate limiting...");
-            sleep(Duration::from_secs(5)).await; // To avoid rate limiting
-            continue;
-        } else {
-            eprintln!("Failed to fetch avatars: {}", avatars.err().unwrap());
-            break;
-        }
-    }
-
-    println!(
-        "Finished fetching avatars. Total avatars fetched: {}",
-        avatar_count
-    );
-}
-
-async fn handler_search(config: Configuration, query: String) {}
 
 fn read_user_input(prompt: &str) -> String {
     print!("{}", prompt);
