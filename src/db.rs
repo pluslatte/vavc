@@ -93,6 +93,28 @@ pub fn get_all_avatars() -> Result<Vec<Avatar>, rusqlite::Error> {
     Ok(avatars)
 }
 
+pub fn get_avatar_first_hit_by_name(query: &str) -> Result<Avatar, rusqlite::Error> {
+    let conn = Connection::open("./avatars.db")?;
+
+    let mut stmt = conn.prepare("SELECT id, name, description, version, thumbnail_image_url, created_at, updated_at FROM avatars WHERE name LIKE ?1 LIMIT 1")?;
+    let mut rows = stmt.query([format!("%{}%", query)])?;
+
+    if let Some(row) = rows.next()? {
+        Ok(Avatar {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            version: row.get(3)?,
+            thumbnail_image_url: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
+            ..Default::default()
+        })
+    } else {
+        Err(rusqlite::Error::QueryReturnedNoRows)
+    }
+}
+
 pub fn register_alias(alias: &str, avatar_id: &str) -> Result<(), rusqlite::Error> {
     let conn = Connection::open("./avatars.db")?;
 

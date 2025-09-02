@@ -151,7 +151,16 @@ async fn main() {
                 return;
             }
             if let Some(query) = query {
-                todo!("Implement switch by search query");
+                match db::get_avatar_first_hit_by_name(&query) {
+                    Ok(avatar) => {
+                        println!("Found avatar: {} ({})", avatar.name, avatar.id);
+                        switch_avatar(make_configuration_with_cookies(), &avatar.id).await;
+                    }
+                    Err(e) => {
+                        eprintln!("Error retrieving avatar for query '{}': {}", query, e);
+                        std::process::exit(1);
+                    }
+                }
                 return;
             }
             if let Some(alias) = alias {
