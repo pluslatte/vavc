@@ -1,12 +1,11 @@
 # vavc
 ## 概要
 アバター変更を行うためのコマンドラインツールです
-## ビルド
-- `cargo build --release`
-- 適当にインストールしてください
+## 準備
+- クローンして `cargo install --path .` とか
 ## 使い方
-vavc という名前で呼び出せるようにしたなら
 ### 基本
+作業ディレクトリに状態が保持されます、たぶん。
 - `vavc auth new`
 - `vavc fetch`
 - `vavc switch -i <アバターのid>`
