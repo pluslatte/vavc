@@ -4,6 +4,7 @@ mod secret;
 use clap::{Parser, Subcommand, command};
 use std::io::{self, Write};
 use vrchatapi::apis;
+use vrchatapi::apis::configuration::Configuration;
 
 use crate::auth::check_auth_cookie;
 use crate::auth::get_new_auth_cookie;
@@ -34,6 +35,9 @@ enum Commands {
         #[arg(short, long, help = "Avatar ID to switch to")]
         id: String,
     },
+
+    #[command(about = "Fetch avatars to local database")]
+    Fetch {},
 
     #[command(about = "Search for avatars")]
     Search {
@@ -68,8 +72,11 @@ async fn main() {
             password,
             check,
         } => handler_auth(username, password, check).await,
+        Commands::Fetch {} => handler_fetch(make_configuration_with_cookies()).await,
         Commands::Switch { id } => handler_switch(id),
-        Commands::Search { query } => handler_search(query).await,
+        Commands::Search { query } => {
+            handler_search(make_configuration_with_cookies(), query).await
+        }
         Commands::Show { id } => handler_show(id),
     }
 }
@@ -82,11 +89,8 @@ async fn handler_auth(username: Option<String>, password: Option<String>, check:
     }
 }
 
-async fn handler_search(query: String) {
-    println!("Search results for query '{}':", query);
-
-    let config = make_configuration_with_cookies();
-
+async fn handler_fetch(config: Configuration) {
+    println!("Fetching avatars...");
     let avatars = apis::avatars_api::search_avatars(
         &config,
         Some(false),
@@ -113,6 +117,8 @@ async fn handler_search(query: String) {
         eprintln!("Failed to fetch avatars: {}", avatars.err().unwrap());
     }
 }
+
+async fn handler_search(config: Configuration, query: String) {}
 
 fn read_user_input(prompt: &str) -> String {
     print!("{}", prompt);
