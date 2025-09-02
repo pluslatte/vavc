@@ -50,6 +50,21 @@ enum AliasCommands {
 }
 
 #[derive(Debug, Subcommand)]
+enum AuthCommands {
+    #[command(about = "(RATE LIMIT WARNING) Get a new auth cookie")]
+    New {
+        #[arg(short, long, help = "Optional pre-input username")]
+        username: Option<String>,
+
+        #[arg(short, long, help = "Optional pre-input password")]
+        password: Option<String>,
+    },
+
+    #[command(about = "Check if saved auth cookie is valid")]
+    Check {},
+}
+
+#[derive(Debug, Subcommand)]
 enum Commands {
     #[command(about = "Manage avatar name aliases")]
     Alias {
@@ -57,16 +72,10 @@ enum Commands {
         command: AliasCommands,
     },
 
-    #[command(about = "(RATE LIMIT WARNING) Get a new auth cookie")]
+    #[command(about = "Manage authentication")]
     Auth {
-        #[arg(short, long, help = "Check if your saved cookie is valid")]
-        check: bool,
-
-        #[arg(short, long, help = "Optional pre-input username")]
-        username: Option<String>,
-
-        #[arg(short, long, help = "Optional pre-input password")]
-        password: Option<String>,
+        #[command(subcommand)]
+        command: AuthCommands,
     },
 
     #[command(about = "Fetch avatars to local database")]
@@ -84,7 +93,7 @@ enum Commands {
         alias: Option<String>,
     },
 
-    #[command(about = "Search for avatars")]
+    #[command(about = "Search for avatars in local database")]
     Search {
         #[arg(short, long, help = "Search query")]
         query: String,
@@ -121,10 +130,14 @@ async fn main() {
                 if let Some(query) = query {
                     match db::get_avatar_first_hit_by_name(&query) {
                         Ok(avatar) => {
-                            println!("Found avatar: {} ({})", avatar.name, avatar.id);
-                            if let Err(e) = db::register_alias(&alias, &avatar.id) {
-                                eprintln!("Error registering alias: {}", e);
-                                return;
+                            if let Some(avatar) = avatar {
+                                println!("Found avatar: {} ({})", avatar.name, avatar.id);
+                                if let Err(e) = db::register_alias(&alias, &avatar.id) {
+                                    eprintln!("Error registering alias: {}", e);
+                                    return;
+                                }
+                            } else {
+                                eprintln!("No avatar found matching query '{}'", query);
                             }
                         }
                         Err(e) => {
@@ -171,17 +184,12 @@ async fn main() {
             }
         },
 
-        Commands::Auth {
-            username,
-            password,
-            check,
-        } => {
-            if check {
-                check_auth_cookie().await
-            } else {
+        Commands::Auth { command } => match command {
+            AuthCommands::New { username, password } => {
                 get_new_auth_cookie(username, password).await
-            };
-        }
+            }
+            AuthCommands::Check {} => check_auth_cookie().await,
+        },
 
         Commands::Fetch {} => {
             let avatars = fetch_avatars(make_configuration_with_cookies()).await;
@@ -205,8 +213,13 @@ async fn main() {
             if let Some(query) = query {
                 match db::get_avatar_first_hit_by_name(&query) {
                     Ok(avatar) => {
-                        println!("Found avatar: {} ({})", avatar.name, avatar.id);
-                        switch_avatar(make_configuration_with_cookies(), &avatar.id).await;
+                        if let Some(avatar) = avatar {
+                            println!("Found avatar: {} ({})", avatar.name, avatar.id);
+                            switch_avatar(make_configuration_with_cookies(), &avatar.id).await;
+                        } else {
+                            eprintln!("No avatar found matching query '{}'", query);
+                            std::process::exit(1);
+                        }
                     }
                     Err(e) => {
                         eprintln!("Error retrieving avatar for query '{}': {}", query, e);
