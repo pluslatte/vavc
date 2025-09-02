@@ -4,7 +4,7 @@ mod fetch;
 mod secret;
 mod switch;
 
-use clap::{ArgGroup, Command};
+use clap::ArgGroup;
 use clap::{Parser, Subcommand, command};
 use std::io::{self, Write};
 use vrchatapi::apis::configuration::Configuration;
@@ -12,7 +12,7 @@ use vrchatapi::apis::configuration::Configuration;
 use crate::auth::check_auth_cookie;
 use crate::auth::get_new_auth_cookie;
 use crate::auth::make_configuration_with_cookies;
-use crate::db::{create_alias_db, create_avatar_db};
+use crate::db::{create_alias_db, get_all_avatars};
 use crate::fetch::fetch_avatars;
 use crate::switch::switch_avatar;
 
@@ -24,7 +24,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    #[command(about = "Manage avatar aliases")]
+    #[command(group(ArgGroup::new("alias_opt").required(true).args(["id", "delete"])), about = "Manage avatar aliases")]
     Alias {
         #[arg(short, long, help = "Alias name")]
         alias: String,
@@ -173,7 +173,18 @@ async fn main() {
 
         Commands::Search { query } => handler_search(make_configuration_with_cookies(), query),
 
-        Commands::List {} => handler_show(),
+        Commands::List {} => {
+            if let Ok(avatars) = get_all_avatars() {
+                for avatar in &avatars {
+                    println!("{}: {}", avatar.name, avatar.id);
+                }
+
+                println!();
+                println!("Total avatars in database: {}", &avatars.len());
+            } else {
+                eprintln!("Error retrieving avatars from database.");
+            }
+        }
     }
 }
 
