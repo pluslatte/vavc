@@ -2,10 +2,12 @@ use std::time::Duration;
 use tokio::time::sleep;
 use vrchatapi::apis;
 use vrchatapi::apis::configuration::Configuration;
+use vrchatapi::models::Avatar;
 
-pub async fn fetch_avatars(config: Configuration) {
+pub async fn fetch_avatars(config: Configuration) -> Vec<Avatar> {
     println!("Fetching avatars...");
 
+    let mut out = Vec::<Avatar>::new();
     let mut avatar_count: usize = 0;
 
     loop {
@@ -42,6 +44,7 @@ pub async fn fetch_avatars(config: Configuration) {
             avatar_count += got;
             avatars.iter().for_each(|avatar| {
                 println!("{}: {}", avatar.name, avatar.id);
+                out.push(avatar.clone());
             });
 
             println!("Sleep for 5 seconds to avoid rate limiting...");
@@ -57,4 +60,6 @@ pub async fn fetch_avatars(config: Configuration) {
         "Finished fetching avatars. Total avatars fetched: {}",
         avatar_count
     );
+
+    out
 }

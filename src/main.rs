@@ -1,9 +1,10 @@
 mod auth;
+mod db;
 mod fetch;
 mod secret;
 mod switch;
 
-use clap::ArgGroup;
+use clap::{ArgGroup, Command};
 use clap::{Parser, Subcommand, command};
 use std::io::{self, Write};
 use vrchatapi::apis::configuration::Configuration;
@@ -11,6 +12,7 @@ use vrchatapi::apis::configuration::Configuration;
 use crate::auth::check_auth_cookie;
 use crate::auth::get_new_auth_cookie;
 use crate::auth::make_configuration_with_cookies;
+use crate::db::{create_alias_db, create_avatar_db};
 use crate::fetch::fetch_avatars;
 use crate::switch::switch_avatar;
 
@@ -22,6 +24,23 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    #[command(about = "Manage avatar aliases")]
+    Alias {
+        #[arg(short, long, help = "Alias name")]
+        alias: String,
+
+        #[arg(short, long, help = "Avatar ID to associate with the alias")]
+        id: Option<String>,
+
+        #[arg(
+            short,
+            long,
+            help = "Delete the alias instead of adding/updating it",
+            default_value_t = false
+        )]
+        delete: bool,
+    },
+
     #[command(about = "(RATE LIMIT WARNING) Get a new auth cookie")]
     Auth {
         #[arg(short, long, help = "Check if your saved cookie is valid")]
@@ -37,13 +56,16 @@ enum Commands {
     #[command(about = "Fetch avatars to local database")]
     Fetch {},
 
-    #[command(group(ArgGroup::new("switch_method").required(true).args(["id", "query"])), about = "Change avatar")]
+    #[command(group(ArgGroup::new("switch_method").required(true).args(["id", "query", "alias"])), about = "Change avatar")]
     Switch {
         #[arg(short, long, help = "Avatar ID to switch to")]
         id: Option<String>,
 
         #[arg(short, long, help = "Local database search query to find avatar")]
         query: Option<String>,
+
+        #[arg(short, long, help = "Avatar name alias to switch to")]
+        alias: Option<String>,
     },
 
     #[command(about = "Search for avatars")]
@@ -52,11 +74,8 @@ enum Commands {
         query: String,
     },
 
-    #[command(about = "Show specifications about an avatar")]
-    Show {
-        #[arg(short, long, help = "Avatar ID to show")]
-        id: String,
-    },
+    #[command(about = "Show all avatars in the local database")]
+    List {},
 }
 
 #[tokio::main]
@@ -74,6 +93,32 @@ async fn main() {
     };
 
     match cli.command {
+        Commands::Alias {
+            alias,
+            id: avatar_id,
+            delete,
+        } => {
+            if let Err(e) = create_alias_db() {
+                eprintln!("Error opening/creating alias database: {}", e);
+                std::process::exit(1);
+            }
+
+            if delete {
+                if let Err(e) = db::remove_alias(&alias) {
+                    eprintln!("Error removing alias: {}", e);
+                    return;
+                }
+            } else if let Some(avatar_id) = avatar_id {
+                if let Err(e) = db::register_alias(&alias, &avatar_id) {
+                    eprintln!("Error registering alias: {}", e);
+                    return;
+                }
+            } else {
+                eprintln!("Avatar ID must be provided: --id <AVATAR_ID>");
+                std::process::exit(1);
+            }
+        }
+
         Commands::Auth {
             username,
             password,
@@ -86,11 +131,20 @@ async fn main() {
             };
         }
 
-        Commands::Fetch {} => fetch_avatars(make_configuration_with_cookies()).await,
+        Commands::Fetch {} => {
+            let avatars = fetch_avatars(make_configuration_with_cookies()).await;
+            if let Err(e) = db::rebuild_avatar_db(avatars) {
+                eprintln!("Error rebuilding avatar database: {}", e);
+                std::process::exit(1);
+            }
+
+            println!("Avatar database updated successfully.");
+        }
 
         Commands::Switch {
             id: avatar_id,
             query,
+            alias,
         } => {
             if let Some(avatar_id) = avatar_id {
                 switch_avatar(make_configuration_with_cookies(), &avatar_id).await;
@@ -100,14 +154,26 @@ async fn main() {
                 todo!("Implement switch by search query");
                 return;
             }
+            if let Some(alias) = alias {
+                match db::get_avatar_id_by_alias(&alias) {
+                    Ok(avatar_id) => {
+                        switch_avatar(make_configuration_with_cookies(), &avatar_id).await;
+                        return;
+                    }
+                    Err(e) => {
+                        eprintln!("Error retrieving avatar ID for alias '{}': {}", alias, e);
+                        std::process::exit(1);
+                    }
+                }
+            }
 
-            eprintln!("Either --id or --query must be provided for switching avatars.");
+            eprintln!("Any of --id, --alias or --query must be provided for switching avatars.");
             std::process::exit(1);
         }
 
         Commands::Search { query } => handler_search(make_configuration_with_cookies(), query),
 
-        Commands::Show { id: avatar_id } => handler_show(avatar_id),
+        Commands::List {} => handler_show(),
     }
 }
 
