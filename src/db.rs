@@ -175,7 +175,7 @@ pub fn remove_alias(alias: &str) -> Result<(), rusqlite::Error> {
 pub fn get_avatar_id_by_alias(alias: &str) -> Result<String, rusqlite::Error> {
     let conn = Connection::open("./avatars.db")?;
 
-    let mut stmt = conn.prepare("SELECT avatar_id FROM aliases WHERE alias = ?1")?;
+    let mut stmt = conn.prepare("SELECT avatar_id FROM aliases WHERE name = ?1")?;
     let mut rows = stmt.query([alias])?;
 
     if let Some(row) = rows.next()? {
@@ -184,4 +184,18 @@ pub fn get_avatar_id_by_alias(alias: &str) -> Result<String, rusqlite::Error> {
     } else {
         Err(rusqlite::Error::QueryReturnedNoRows)
     }
+}
+
+pub fn get_all_aliases() -> Result<Vec<(String, String)>, rusqlite::Error> {
+    let conn = Connection::open("./avatars.db")?;
+
+    let mut stmt = conn.prepare("SELECT name, avatar_id FROM aliases")?;
+    let alias_iter = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+
+    let mut aliases = Vec::new();
+    for alias in alias_iter {
+        aliases.push(alias?);
+    }
+
+    Ok(aliases)
 }

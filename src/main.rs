@@ -7,7 +7,6 @@ mod switch;
 use clap::ArgGroup;
 use clap::{Parser, Subcommand, command};
 use std::io::{self, Write};
-use vrchatapi::apis::configuration::Configuration;
 
 use crate::auth::check_auth_cookie;
 use crate::auth::get_new_auth_cookie;
@@ -23,22 +22,28 @@ struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
-enum Commands {
-    #[command(group(ArgGroup::new("alias_opt").required(true).args(["id", "delete"])), about = "Manage avatar aliases")]
-    Alias {
+enum AliasCommands {
+    Set {
         #[arg(short, long, help = "Alias name")]
         alias: String,
 
         #[arg(short, long, help = "Avatar ID to associate with the alias")]
-        id: Option<String>,
+        id: String,
+    },
 
-        #[arg(
-            short,
-            long,
-            help = "Delete the alias instead of adding/updating it",
-            default_value_t = false
-        )]
-        delete: bool,
+    Delete {
+        #[arg(short, long, help = "Alias name")]
+        alias: String,
+    },
+
+    List {},
+}
+
+#[derive(Debug, Subcommand)]
+enum Commands {
+    Alias {
+        #[command(subcommand)]
+        command: AliasCommands,
     },
 
     #[command(about = "(RATE LIMIT WARNING) Get a new auth cookie")]
@@ -74,7 +79,7 @@ enum Commands {
         query: String,
     },
 
-    #[command(about = "Show all avatars in the local database")]
+    #[command(about = "Show all avatars in local database")]
     List {},
 }
 
@@ -83,31 +88,56 @@ async fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Alias {
-            alias,
-            id: avatar_id,
-            delete,
-        } => {
-            if let Err(e) = create_alias_db() {
-                eprintln!("Error opening/creating alias database: {}", e);
-                std::process::exit(1);
-            }
-
-            if delete {
-                if let Err(e) = db::remove_alias(&alias) {
-                    eprintln!("Error removing alias: {}", e);
-                    return;
+        Commands::Alias { command } => match command {
+            AliasCommands::Set {
+                alias,
+                id: avatar_id,
+            } => {
+                if let Err(e) = create_alias_db() {
+                    eprintln!("Error opening/creating alias database: {}", e);
+                    std::process::exit(1);
                 }
-            } else if let Some(avatar_id) = avatar_id {
+
                 if let Err(e) = db::register_alias(&alias, &avatar_id) {
                     eprintln!("Error registering alias: {}", e);
                     return;
                 }
-            } else {
-                eprintln!("Avatar ID must be provided: --id <AVATAR_ID>");
-                std::process::exit(1);
             }
-        }
+
+            AliasCommands::Delete { alias } => {
+                if let Err(e) = create_alias_db() {
+                    eprintln!("Error opening/creating alias database: {}", e);
+                    std::process::exit(1);
+                }
+
+                if let Err(e) = db::remove_alias(&alias) {
+                    eprintln!("Error removing alias: {}", e);
+                    return;
+                }
+            }
+
+            AliasCommands::List {} => {
+                if let Err(e) = create_alias_db() {
+                    eprintln!("Error opening/creating alias database: {}", e);
+                    std::process::exit(1);
+                }
+
+                match db::get_all_aliases() {
+                    Ok(aliases) => {
+                        for (name, avatar_id) in &aliases {
+                            println!("{}: {}", name, avatar_id);
+                        }
+
+                        println!();
+                        println!("Total aliases: {}", &aliases.len());
+                    }
+                    Err(e) => {
+                        eprintln!("Error retrieving aliases from database: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+        },
 
         Commands::Auth {
             username,
@@ -156,6 +186,10 @@ async fn main() {
             if let Some(alias) = alias {
                 match db::get_avatar_id_by_alias(&alias) {
                     Ok(avatar_id) => {
+                        println!(
+                            "Resolved avatar alias in local database: {} ({})",
+                            &alias, avatar_id
+                        );
                         switch_avatar(make_configuration_with_cookies(), &avatar_id).await;
                         return;
                     }
