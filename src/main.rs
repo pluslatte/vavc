@@ -23,24 +23,35 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum AliasCommands {
+    #[command(group(ArgGroup::new("alias_set").required(true).args(["id", "query"])), about = "Set avatar name aliases")]
     Set {
         #[arg(short, long, help = "Alias name")]
         alias: String,
 
         #[arg(short, long, help = "Avatar ID to associate with the alias")]
-        id: String,
+        id: Option<String>,
+
+        #[arg(
+            short,
+            long,
+            help = "Query to search for avatar ID instead of providing directly"
+        )]
+        query: Option<String>,
     },
 
+    #[command(about = "Delete avatar name aliases")]
     Delete {
         #[arg(short, long, help = "Alias name")]
         alias: String,
     },
 
+    #[command(about = "List all avatar name aliases")]
     List {},
 }
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    #[command(about = "Manage avatar name aliases")]
     Alias {
         #[command(subcommand)]
         command: AliasCommands,
@@ -92,14 +103,35 @@ async fn main() {
             AliasCommands::Set {
                 alias,
                 id: avatar_id,
+                query,
             } => {
                 if let Err(e) = create_alias_db() {
                     eprintln!("Error opening/creating alias database: {}", e);
                     std::process::exit(1);
                 }
 
-                if let Err(e) = db::register_alias(&alias, &avatar_id) {
-                    eprintln!("Error registering alias: {}", e);
+                if let Some(avatar_id) = avatar_id {
+                    if let Err(e) = db::register_alias(&alias, &avatar_id) {
+                        eprintln!("Error registering alias: {}", e);
+                        return;
+                    }
+                    return;
+                }
+
+                if let Some(query) = query {
+                    match db::get_avatar_first_hit_by_name(&query) {
+                        Ok(avatar) => {
+                            println!("Found avatar: {} ({})", avatar.name, avatar.id);
+                            if let Err(e) = db::register_alias(&alias, &avatar.id) {
+                                eprintln!("Error registering alias: {}", e);
+                                return;
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Error retrieving avatar for query '{}': {}", query, e);
+                            return;
+                        }
+                    }
                     return;
                 }
             }
