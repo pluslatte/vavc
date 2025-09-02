@@ -1,6 +1,7 @@
 mod auth;
 mod fetch;
 mod secret;
+mod switch;
 
 use clap::{Parser, Subcommand, command};
 use std::io::{self, Write};
@@ -10,6 +11,7 @@ use crate::auth::check_auth_cookie;
 use crate::auth::get_new_auth_cookie;
 use crate::auth::make_configuration_with_cookies;
 use crate::fetch::fetch_avatars;
+use crate::switch::switch_avatar;
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -62,14 +64,9 @@ async fn main() {
         println!("Searching for avatars with query: {}", query);
     };
 
-    let handler_switch = |id: String| {
-        // Placeholder for switch logic
-        println!("Switching to avatar ID: {}", id);
-    };
-
-    let handler_show = |id: String| {
+    let handler_show = |avatar_id: String| {
         // Placeholder for show logic
-        println!("Showing specifications for avatar ID: {}", id);
+        println!("Showing specifications for avatar ID: {}", avatar_id);
     };
 
     match cli.command {
@@ -85,9 +82,11 @@ async fn main() {
             };
         }
         Commands::Fetch {} => fetch_avatars(make_configuration_with_cookies()).await,
-        Commands::Switch { id } => handler_switch(id),
+        Commands::Switch { id: avatar_id } => {
+            switch_avatar(make_configuration_with_cookies(), &avatar_id).await
+        }
         Commands::Search { query } => handler_search(make_configuration_with_cookies(), query),
-        Commands::Show { id } => handler_show(id),
+        Commands::Show { id: avatar_id } => handler_show(avatar_id),
     }
 }
 
