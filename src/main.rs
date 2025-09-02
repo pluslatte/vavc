@@ -7,7 +7,7 @@ use vrchatapi::apis;
 
 use crate::auth::check_auth_cookie;
 use crate::auth::get_new_auth_cookie;
-use crate::auth::prepare_auth_cookie;
+use crate::auth::make_configuration_with_cookies;
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -85,7 +85,7 @@ async fn handler_auth(username: Option<String>, password: Option<String>, check:
 async fn handler_search(query: String) {
     println!("Search results for query '{}':", query);
 
-    let config = prepare_auth_cookie();
+    let config = make_configuration_with_cookies();
 
     let avatars = apis::avatars_api::search_avatars(
         &config,

@@ -79,7 +79,7 @@ pub async fn get_new_auth_cookie(username: Option<String>, password: Option<Stri
 }
 
 pub async fn check_auth_cookie() {
-    let config = prepare_auth_cookie();
+    let config = make_configuration_with_cookies();
 
     match apis::authentication_api::verify_auth_token(&config).await {
         Ok(_) => println!("Auth cookie is valid"),
@@ -87,7 +87,7 @@ pub async fn check_auth_cookie() {
     }
 }
 
-pub fn prepare_auth_cookie() -> Configuration {
+pub fn make_configuration_with_cookies() -> Configuration {
     let jar = Arc::new(reqwest::cookie::Jar::default());
     match read_secret_in_directory() {
         Some(cookies) => {
