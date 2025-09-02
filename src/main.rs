@@ -3,6 +3,7 @@ mod fetch;
 mod secret;
 mod switch;
 
+use clap::ArgGroup;
 use clap::{Parser, Subcommand, command};
 use std::io::{self, Write};
 use vrchatapi::apis::configuration::Configuration;
@@ -36,10 +37,13 @@ enum Commands {
     #[command(about = "Fetch avatars to local database")]
     Fetch {},
 
-    #[command(about = "Change avatar")]
+    #[command(group(ArgGroup::new("switch_method").required(true).args(["id", "query"])), about = "Change avatar")]
     Switch {
         #[arg(short, long, help = "Avatar ID to switch to")]
-        id: String,
+        id: Option<String>,
+
+        #[arg(short, long, help = "Local database search query to find avatar")]
+        query: Option<String>,
     },
 
     #[command(about = "Search for avatars")]
@@ -82,8 +86,21 @@ async fn main() {
             };
         }
         Commands::Fetch {} => fetch_avatars(make_configuration_with_cookies()).await,
-        Commands::Switch { id: avatar_id } => {
-            switch_avatar(make_configuration_with_cookies(), &avatar_id).await
+        Commands::Switch {
+            id: avatar_id,
+            query,
+        } => {
+            if let Some(avatar_id) = avatar_id {
+                switch_avatar(make_configuration_with_cookies(), &avatar_id).await;
+                return;
+            }
+            if let Some(query) = query {
+                todo!("Implement switch by search query");
+                return;
+            }
+
+            eprintln!("Either --id or --query must be provided for switching avatars.");
+            std::process::exit(1);
         }
         Commands::Search { query } => handler_search(make_configuration_with_cookies(), query),
         Commands::Show { id: avatar_id } => handler_show(avatar_id),
