@@ -33,14 +33,14 @@ enum Commands {
         password: Option<String>,
     },
 
+    #[command(about = "Fetch avatars to local database")]
+    Fetch {},
+
     #[command(about = "Change avatar")]
     Switch {
         #[arg(short, long, help = "Avatar ID to switch to")]
         id: String,
     },
-
-    #[command(about = "Fetch avatars to local database")]
-    Fetch {},
 
     #[command(about = "Search for avatars")]
     Search {
