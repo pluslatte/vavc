@@ -85,7 +85,9 @@ async fn main() {
                 get_new_auth_cookie(username, password).await
             };
         }
+
         Commands::Fetch {} => fetch_avatars(make_configuration_with_cookies()).await,
+
         Commands::Switch {
             id: avatar_id,
             query,
@@ -102,7 +104,9 @@ async fn main() {
             eprintln!("Either --id or --query must be provided for switching avatars.");
             std::process::exit(1);
         }
+
         Commands::Search { query } => handler_search(make_configuration_with_cookies(), query),
+
         Commands::Show { id: avatar_id } => handler_show(avatar_id),
     }
 }
