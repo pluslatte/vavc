@@ -82,16 +82,6 @@ enum Commands {
 async fn main() {
     let cli = Cli::parse();
 
-    let handler_search = |config: Configuration, query: String| {
-        // Placeholder for search logic
-        println!("Searching for avatars with query: {}", query);
-    };
-
-    let handler_show = |avatar_id: String| {
-        // Placeholder for show logic
-        println!("Showing specifications for avatar ID: {}", avatar_id);
-    };
-
     match cli.command {
         Commands::Alias {
             alias,
@@ -180,7 +170,20 @@ async fn main() {
             std::process::exit(1);
         }
 
-        Commands::Search { query } => handler_search(make_configuration_with_cookies(), query),
+        Commands::Search { query } => match db::get_avatars_by_name(&query) {
+            Ok(avatars) => {
+                for avatar in &avatars {
+                    println!("{}: {}", avatar.name, avatar.id);
+                }
+
+                println!();
+                println!("Total avatars found: {}", &avatars.len());
+            }
+            Err(e) => {
+                eprintln!("Error retrieving avatars from database: {}", e);
+                std::process::exit(1);
+            }
+        },
 
         Commands::List {} => {
             if let Ok(avatars) = get_all_avatars() {
@@ -192,6 +195,7 @@ async fn main() {
                 println!("Total avatars in database: {}", &avatars.len());
             } else {
                 eprintln!("Error retrieving avatars from database.");
+                std::process::exit(1);
             }
         }
     }
