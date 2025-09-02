@@ -1,6 +1,8 @@
 # vavc
 ## 概要
 アバター変更を行うためのコマンドラインツールです
+## ビルド
+- `cargo build --release`
 ## 使い方
 ### 基本
 - `vavc auth new`
